@@ -1,0 +1,195 @@
+import Task from '../models/Task.model.js';
+import Board from '../models/Board.model.js';
+
+// GET /api/tasks?boardId= - List all tasks for a board
+export const getTasks = async (req, res) => {
+  try {
+    const { boardId } = req.query;
+    if (!boardId) return res.status(400).json({ error: 'boardId required' });
+    const tasks = await Task.find({ boardId });
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tasks' });
+  }
+};
+
+// POST /api/tasks - Create a new task
+export const createTask = async (req, res) => {
+  try {
+    const { title, status, boardId, description, assignedTo, dueDate, order } = req.body;
+    
+    if (!title || !status || !boardId) {
+      return res.status(400).json({ error: 'title, status, and boardId required' });
+    }
+
+    // if no order in body then calculate it chronologically
+    let finalOrder = order;
+    
+    if (finalOrder === undefined || finalOrder === null) {
+        const lastTask = await Task.findOne({ boardId, status })
+                                   .sort({ order: -1 }) 
+                                   .select('order');  
+        
+        finalOrder = lastTask ? lastTask.order + 1 : 0;
+    }
+
+    const task = new Task({
+      title,
+      status,
+      boardId,
+      description: description || '',
+      assignedTo: assignedTo || '',
+      dueDate: dueDate || null,
+      order: finalOrder 
+    });
+
+    const savedTask = await task.save();
+
+    await Board.findByIdAndUpdate(
+        boardId, 
+        { $push: { tasks: savedTask._id } } 
+    );
+
+    res.status(201).json(savedTask);
+
+  } catch (err) {
+    console.error("Task Create Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// PUT /api/tasks/:id - Update a task (edit, move, reorder)
+export const updateTask = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const update = req.body;
+
+    delete update.boardId; 
+    delete update.order;
+
+    const task = await Task.findByIdAndUpdate(id, update, { new: true });
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update task' });
+  }
+};
+
+// DELETE /api/tasks/:id - Delete a task
+export const deleteTask = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const task = await Task.findByIdAndDelete(id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    await Board.findByIdAndUpdate(
+        task.boardId,
+        { $pull: { tasks: id } }
+    );
+
+    res.json({ message: 'Task deleted' });
+    
+    } catch (err) {
+        console.error("Delete Error:", err.message);
+        res.status(500).json({ error: 'Failed to delete task' });
+  }
+};
+
+// PUT /api/tasks/:id/move - move a task between statuses and reorder
+export const moveTask = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status: targetStatus, order: targetOrder } = req.body;
+
+    if (!targetStatus) return res.status(400).json({ error: 'target status required' });
+
+    const validStatuses = ['to_do', 'in_progress', 'done'];
+    if (!validStatuses.includes(targetStatus)) {
+      return res.status(400).json({ error: 'invalid status' });
+    }
+
+    const task = await Task.findById(id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+
+    const boardId = task.boardId;
+
+    // compute new order: if not provided, append to end of target status
+    let newOrder = typeof targetOrder === 'number' ? targetOrder : null;
+    if (newOrder === null) {
+      const max = await Task.find({ boardId, status: targetStatus }).sort('-order').limit(1);
+      newOrder = (max[0]?.order ?? -1) + 1;
+    }
+
+    // If moving within same status and moving down/up, adjust orders between ranges
+    if (task.status === targetStatus) {
+      const oldOrder = task.order ?? 0;
+      if (newOrder === oldOrder) {
+        // nothing to do
+        task.status = targetStatus;
+        task.order = newOrder;
+        await task.save();
+        return res.json(task);
+      }
+
+      if (newOrder > oldOrder) {
+        // decrement orders between oldOrder+1 .. newOrder
+        await Task.updateMany(
+          { boardId, status: targetStatus, order: { $gt: oldOrder, $lte: newOrder } },
+          { $inc: { order: -1 } }
+        );
+      } else {
+        // increment orders between newOrder .. oldOrder-1
+        await Task.updateMany(
+          { boardId, status: targetStatus, order: { $gte: newOrder, $lt: oldOrder } },
+          { $inc: { order: 1 } }
+        );
+      }
+
+      task.order = newOrder;
+      await task.save();
+      return res.json(task);
+    }
+
+    // Moving to different status:
+    // decrement orders in old status for items after this task
+    const oldOrder = task.order ?? 0;
+    await Task.updateMany(
+      { boardId, status: task.status, order: { $gt: oldOrder } },
+      { $inc: { order: -1 } }
+    );
+
+    // increment orders in target status for items at or after newOrder
+    await Task.updateMany(
+      { boardId, status: targetStatus, order: { $gte: newOrder } },
+      { $inc: { order: 1 } }
+    );
+
+    task.status = targetStatus;
+    task.order = newOrder;
+    await task.save();
+    res.json(task);
+  } catch (err) {
+    console.error('Move Task Error:', err.message);
+    res.status(500).json({ error: 'Failed to move task' });
+  }
+};
+
+// GET /api/tasks/search?q=keyword - search tasks by title or description
+export const searchTasks = async (req, res) => {
+  try {
+    const q = req.query.q || '';
+    const boardId = req.query.boardId;
+    if (!q) return res.status(400).json({ error: 'q query required' });
+
+    const regex = new RegExp(q, 'i');
+    const filter = { $or: [{ title: regex }, { description: regex }] };
+    if (boardId) filter.boardId = boardId;
+
+    const results = await Task.find(filter);
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Search failed' });
+  }
+};
