@@ -17,21 +17,39 @@ export const getTasks = async (req, res) => {
 export const createTask = async (req, res) => {
   try {
     const { title, status, boardId, description, assignedTo, dueDate, order } = req.body;
-    
+
     if (!title || !status || !boardId) {
       return res.status(400).json({ error: 'title, status, and boardId required' });
     }
 
     // if no order in body then calculate it chronologically
     let finalOrder = order;
-    
+
     if (finalOrder === undefined || finalOrder === null) {
-        const lastTask = await Task.findOne({ boardId, status })
-                                   .sort({ order: -1 }) 
-                                   .select('order');  
-        
-        finalOrder = lastTask ? lastTask.order + 1 : 0;
+      const lastTask = await Task.findOne({ boardId, status })
+        .sort({ order: -1 })
+        .select('order');
+
+      finalOrder = lastTask ? lastTask.order + 1 : 0;
     }
+
+    // Atomically increment a counter 
+    const board = await Board.findByIdAndUpdate(
+      boardId,
+      { $inc: { nextDisplayNumber: 1 } },
+      { new: true, select: 'nextDisplayNumber key name tasks' }
+    );
+
+    if (!board) return res.status(400).json({ error: 'Invalid boardId' });
+
+    const displayNumberComputed = board.nextDisplayNumber || (Array.isArray(board.tasks) ? board.tasks.length + 1 : 1);
+    const boardKey = board.key || (() => {
+      const words = (board.name || '').replace(/[^a-zA-Z0-9 ]/g, '').split(' ').filter(w => w);
+      if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
+      return (words[0] || 'BR').slice(0,2).toUpperCase();
+    })();
+
+    const computedDisplayId = `${boardKey}-${displayNumberComputed}`;
 
     const task = new Task({
       title,
@@ -40,7 +58,8 @@ export const createTask = async (req, res) => {
       description: description || '',
       assignedTo: assignedTo || '',
       dueDate: dueDate || null,
-      order: finalOrder 
+      order: finalOrder,
+      displayId: computedDisplayId
     });
 
     const savedTask = await task.save();
@@ -85,8 +104,8 @@ export const deleteTask = async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
     await Board.findByIdAndUpdate(
-        task.boardId,
-        { $pull: { tasks: id } }
+      task.boardId,
+      { $pull: { tasks: task._id } }
     );
 
     res.json({ message: 'Task deleted' });
@@ -115,18 +134,15 @@ export const moveTask = async (req, res) => {
 
     const boardId = task.boardId;
 
-    // compute new order: if not provided, append to end of target status
     let newOrder = typeof targetOrder === 'number' ? targetOrder : null;
     if (newOrder === null) {
       const max = await Task.find({ boardId, status: targetStatus }).sort('-order').limit(1);
       newOrder = (max[0]?.order ?? -1) + 1;
     }
 
-    // If moving within same status and moving down/up, adjust orders between ranges
     if (task.status === targetStatus) {
       const oldOrder = task.order ?? 0;
       if (newOrder === oldOrder) {
-        // nothing to do
         task.status = targetStatus;
         task.order = newOrder;
         await task.save();
@@ -134,13 +150,11 @@ export const moveTask = async (req, res) => {
       }
 
       if (newOrder > oldOrder) {
-        // decrement orders between oldOrder+1 .. newOrder
         await Task.updateMany(
           { boardId, status: targetStatus, order: { $gt: oldOrder, $lte: newOrder } },
           { $inc: { order: -1 } }
         );
       } else {
-        // increment orders between newOrder .. oldOrder-1
         await Task.updateMany(
           { boardId, status: targetStatus, order: { $gte: newOrder, $lt: oldOrder } },
           { $inc: { order: 1 } }
@@ -152,15 +166,12 @@ export const moveTask = async (req, res) => {
       return res.json(task);
     }
 
-    // Moving to different status:
-    // decrement orders in old status for items after this task
     const oldOrder = task.order ?? 0;
     await Task.updateMany(
       { boardId, status: task.status, order: { $gt: oldOrder } },
       { $inc: { order: -1 } }
     );
-
-    // increment orders in target status for items at or after newOrder
+    
     await Task.updateMany(
       { boardId, status: targetStatus, order: { $gte: newOrder } },
       { $inc: { order: 1 } }

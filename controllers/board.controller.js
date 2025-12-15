@@ -43,7 +43,17 @@ export const deleteBoard = async (req, res) => {
     if (!board) {
       return res.status(404).json({ error: 'Board not found' });
     }
-    res.json({ message: 'Board deleted' });
+
+    // Remove all tasks that belong to this board
+    try {
+      if (Array.isArray(board.tasks) && board.tasks.length > 0) {
+        await Task.deleteMany({ _id: { $in: board.tasks } });
+      }
+    } catch (cleanupErr) {
+      console.error('Failed to delete tasks for board:', cleanupErr.message);
+    }
+
+    res.json({ message: 'Board and its tasks deleted' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete board' });
   }

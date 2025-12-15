@@ -5,6 +5,7 @@ const boardSchema = new mongoose.Schema({
   name: { type: String, required: true },
   key: { type: String, required: true, unique: true },
   tasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }], 
+  nextDisplayNumber: { type: Number, default: 0 },
 });
 
 boardSchema.set('toJSON', {

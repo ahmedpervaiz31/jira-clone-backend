@@ -58,7 +58,8 @@ Files: [models/User.model.js](models/User.model.js), [models/Board.model.js](mod
   - Schema fields:
     - `name` (String, required)
     - `key` (String, required, unique)
-    - `tasks` (Array of String references to Task IDs)
+    - `tasks` (Array of ObjectId references to Task documents)
+    - `nextDisplayNumber` (Number) — internal counter used to generate monotonic task display numbers for the board
 
   - Notes: `tasks` contains task identifiers associated with the board.
 
@@ -73,6 +74,8 @@ Files: [models/User.model.js](models/User.model.js), [models/Board.model.js](mod
     - `dueDate` (String | null)
     - `createdAt` (Date)
     - `order` (Number)
+    - `displayId` (String) — human-friendly id like `AB-1` shown in the UI
+    - `displayNumber` (Number) — numeric suffix used to build `displayId`
 
   - Notes: `boardId` is a Mongo ObjectId referencing the board. The API uses Mongo `_id` for primary identifiers.
 
@@ -151,7 +154,7 @@ Files: [routes/board.routes.js](routes/board.routes.js), [controllers/board.cont
   - Success: array of board objects:
 
     ```json
-    [ { "_id": "...", "name": "My Board", "key": "MB", "tasks": ["taskId1", "taskId2"] } ]
+    [ { "_id": "...", "name": "My Board", "key": "MB", "tasks": [ {"id":"...","title":"...","displayId":"MB-1"}, {"id":"...","title":"...","displayId":"MB-2"} ] } ]
     ```
 
 - POST `/api/boards`
@@ -186,7 +189,8 @@ Files: [routes/task.routes.js](routes/task.routes.js), [controllers/task.control
       "order": 1
     }
     ```
-  - Success (201): created task object (including `_id` and `createdAt`)
+  - Notes: The server now generates and persists a human-friendly `displayId` for each created task (e.g. `AB-1`). The backend computes `displayNumber` using a monotonic counter stored on the parent `Board` (`nextDisplayNumber`) so deleted tasks do not cause display numbers to be reused.
+  - Success (201): created task object (includes `_id`, `displayId`, and `createdAt`)
 
 - PUT `/api/tasks/:id`
   - Path param: `id` — currently controller updates by custom `id` field if present; prefer using Mongo `_id`.
@@ -194,13 +198,13 @@ Files: [routes/task.routes.js](routes/task.routes.js), [controllers/task.control
 
 - DELETE `/api/tasks/:id`
   - Deletes task by id (see note about `_id` vs custom id below).
+  - Notes: Deleting a task also removes its ObjectId reference from the parent board's `tasks` array.
 
 ---
 
 ## ID strategy and important notes
 
 - Boards and Tasks use Mongo `_id` as primary identifiers. `Task.boardId` is an ObjectId referencing `Board`.
-- Some controllers historically used a custom `id` field; current code primarily uses Mongo `_id` for creation and retrieval — if the frontend expects a different `id` field, you should normalize either on the frontend or update controllers to map `_id` → `id` in responses.
 - CORS is configured to allow `FRONTEND_URL` and `Authorization` header.
 
 ---
@@ -250,195 +254,3 @@ curl -X POST http://localhost:4000/api/boards \
 - CORS errors: ensure `FRONTEND_URL` is set to your frontend origin (for local Vite dev: `http://localhost:5173`).
 
 ---
-
-## Next improvements (suggested)
-
-- Add request validation (express-validator or Joi) for all endpoints.
-- Scope boards/tasks to the authenticated user (add `owner` to Board and Task and filter by `req.user.id`).
-- Normalize ID usage: always include `id` in responses alongside `_id` if frontend expects `id`.
-- Add a search endpoint for tasks to support the frontend search feature.
-
----
-
-If you want, I can also generate a short OpenAPI spec or Postman collection from this README to make frontend integration easier — tell me which you prefer.
-# Jira Backend API
-
-A Node.js + Express + MongoDB backend for a simple Kanban/Jira clone. This backend provides authentication, board, and task management APIs, using JWT for authentication and Mongoose for data modeling.
-
----
-
-## Table of Contents
-
-- [Project Structure](#project-structure)
-- [Setup & Running](#setup--running)
-- [Environment Variables](#environment-variables)
-- [API Overview](#api-overview)
-  - [Authentication](#authentication)
-  - [Boards](#boards)
-  - [Tasks](#tasks)
-- [File-by-File Explanation](#file-by-file-explanation)
-
----
-
-## Project Structure
-
-```
-jira-backend/
-  server.js
-  database/
-    Mongo.database.js
-  middleware/
-    auth.middleware.js
-  models/
-    User.model.js
-    Board.model.js
-    Task.model.js
-  controllers/
-    auth.controller.js
-    board.controller.js
-    task.controller.js
-  routes/
-    auth.routes.js
-    board.routes.js
-    task.routes.js
-  package.json
-```
-
----
-
-## Setup & Running
-
-1. **Install dependencies:**
-   ```
-   npm install
-   ```
-
-2. **Set environment variables:**  
-   Create a `.env` file with:
-   ```
-   MONGO_URI=mongodb://localhost:27017/jira-clone
-   JWT_SECRET=your_jwt_secret
-   PORT=4000
-   ```
-
-3. **Start the server:**
-   ```
-   npm run dev
-   ```
-   or
-   ```
-   node server.js
-   ```
-
----
-
-## Environment Variables
-
-- `MONGO_URI`: MongoDB connection string.
-- `JWT_SECRET`: Secret for signing JWT tokens.
-- `PORT`: Port to run the server (default: 4000).
-
----
-
-## API Overview
-
-All endpoints (except `/api/auth/register` and `/api/auth/login`) require a JWT token in the `Authorization: Bearer <token>` header.
-
-### Authentication
-
-- `POST /api/auth/register`  
-  Register a new user.  
-  Body: `{ "username": "user", "password": "pass" }`
-
-- `POST /api/auth/login`  
-  Login and receive a JWT.  
-  Body: `{ "username": "user", "password": "pass" }`
-
-- `GET /api/auth/me`  
-  Get current user info (requires JWT).
-
-### Boards
-
-- `GET /api/boards`  
-  List all boards for the user.
-
-- `POST /api/boards`  
-  Create a new board.  
-  Body: `{ "name": "Board Name", "key": "BOARDKEY" }`
-
-- `DELETE /api/boards/:id`  
-  Delete a board by its MongoDB `_id`.
-
-### Tasks
-
-- `GET /api/tasks?boardId=<boardId>`  
-  List all tasks for a board.
-
-- `POST /api/tasks`  
-  Create a new task.  
-  Body: `{ "title": "Task", "status": "todo", "boardId": "<boardId>", ... }`
-
-- `PUT /api/tasks/:id`  
-  Update a task by its MongoDB `_id`.
-
-- `DELETE /api/tasks/:id`  
-  Delete a task by its MongoDB `_id`.
-
----
-
-## File-by-File Explanation
-
-### server.js
-- Main entry point. Sets up Express, connects to MongoDB, loads routes, and starts the server.
-
-### database/Mongo.database.js
-- Exports `connectDB`, which connects to MongoDB using Mongoose.
-
-### middleware/auth.middleware.js
-- Exports `authenticate`, a middleware that checks for a valid JWT in the `Authorization` header.
-
-### models/User.model.js
-- Mongoose schema for users: `username` (unique), `password` (hashed).
-
-### models/Board.model.js
-- Mongoose schema for boards: `name`, `key` (unique), and an array of task references.
-
-### models/Task.model.js
-- Mongoose schema for tasks: `title`, `status`, `assignedTo`, `description`, `dueDate`, `createdAt`, `order`, and `boardId`.
-
-### controllers/auth.controller.js
-- `register`: Registers a new user, hashes password, returns JWT.
-- `login`: Authenticates user, returns JWT.
-- `me`: Returns current user info if JWT is valid.
-
-### controllers/board.controller.js
-- `getBoards`: Lists all boards.
-- `createBoard`: Creates a new board.
-- `deleteBoard`: Deletes a board by `_id`.
-
-### controllers/task.controller.js
-- `getTasks`: Lists all tasks for a board.
-- `createTask`: Creates a new task.
-- `updateTask`: Updates a task by `_id`.
-- `deleteTask`: Deletes a task by `_id`.
-
-### routes/auth.routes.js
-- Routes for authentication: `/register`, `/login`, `/me`.
-
-### routes/board.routes.js
-- Routes for boards: `/` (GET, POST), `/:id` (DELETE).
-
-### routes/task.routes.js
-- Routes for tasks: `/` (GET, POST), `/:id` (PUT, DELETE).
-
----
-
-## Notes
-
-- All data is scoped to a single user (no multi-user/organization logic).
-- All API responses are JSON.
-- Error handling is basic; you may want to add more robust validation and error responses for production use.
-
----
-
-Let me know if you want further customization!
