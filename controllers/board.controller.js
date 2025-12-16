@@ -11,6 +11,18 @@ export const getBoards = async (req, res) => {
   }
 };
 
+// GET /api/boards/:id - Get a single board by ID
+export const getBoardById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ error: 'Board not found' });
+    res.json(board);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch board' });
+  }
+};
+
 // POST /api/boards - Create a new board
 export const createBoard = async (req, res) => {
   try {
@@ -19,7 +31,6 @@ export const createBoard = async (req, res) => {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    // Always generate a 2-letter key from the name if not provided or invalid
     let key = keyFromClient;
     if (!key || typeof key !== 'string' || key.length < 2) {
       const words = (name || '').replace(/[^a-zA-Z0-9 ]/g, '').split(' ').filter(w => w);
@@ -42,6 +53,20 @@ export const createBoard = async (req, res) => {
   }
 };
 
+// GET /api/boards/search?q=keyword - search boards by name or key
+export const searchBoards = async (req, res) => {
+  try {
+    const q = req.query.q || '';
+    const regex = new RegExp(q, 'i');
+    const filter = { $or: [{ name: regex }, { key: regex }] };
+
+    const results = await Board.find(filter).limit(20);
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Search failed' });
+  }
+};
+
 // DELETE /api/boards/:id - Delete a board
 export const deleteBoard = async (req, res) => {
   try {
@@ -51,7 +76,6 @@ export const deleteBoard = async (req, res) => {
       return res.status(404).json({ error: 'Board not found' });
     }
 
-    // Remove all tasks that belong to this board
     try {
       if (Array.isArray(board.tasks) && board.tasks.length > 0) {
         await Task.deleteMany({ _id: { $in: board.tasks } });

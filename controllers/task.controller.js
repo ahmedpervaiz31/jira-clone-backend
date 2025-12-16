@@ -84,7 +84,7 @@ export const updateTask = async (req, res) => {
     const update = req.body;
 
     delete update.boardId; 
-    delete update.order;
+    // delete update.order;
 
     const task = await Task.findByIdAndUpdate(id, update, { new: true });
     if (!task) return res.status(404).json({ error: 'Task not found' });
@@ -187,20 +187,39 @@ export const moveTask = async (req, res) => {
   }
 };
 
-// GET /api/tasks/search?q=keyword - search tasks by title or description
+// GET /api/tasks/search?q=keyword
 export const searchTasks = async (req, res) => {
   try {
     const q = req.query.q || '';
-    const boardId = req.query.boardId;
-    if (!q) return res.status(400).json({ error: 'q query required' });
-
     const regex = new RegExp(q, 'i');
-    const filter = { $or: [{ title: regex }, { description: regex }] };
-    if (boardId) filter.boardId = boardId;
+    const filter = { 
+      $or: [
+        { title: regex }, { description: regex },  
+        { displayId: regex }, { assignedTo: regex }   
+      ] 
+    };
 
-    const results = await Task.find(filter);
+    const boardId = req.query.boardId;
+    if (boardId) {
+       filter.$and = [{ boardId: boardId }]; 
+    }
+
+    const results = await Task.find(filter).limit(20);
     res.json(results);
   } catch (err) {
+    console.error("Search error", err);
     res.status(500).json({ error: 'Search failed' });
+  }
+};
+
+// GET /api/tasks/:id - Get a single task by ID
+export const getTaskById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const task = await Task.findById(id);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch task' });
   }
 };
