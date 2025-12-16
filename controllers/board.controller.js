@@ -14,16 +14,23 @@ export const getBoards = async (req, res) => {
 // POST /api/boards - Create a new board
 export const createBoard = async (req, res) => {
   try {
-    const { name, key } = req.body;
-    
-    if (!name || !key) {
-      return res.status(400).json({ error: 'Name and key are required' });
+    const { name, key: keyFromClient } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Always generate a 2-letter key from the name if not provided or invalid
+    let key = keyFromClient;
+    if (!key || typeof key !== 'string' || key.length < 2) {
+      const words = (name || '').replace(/[^a-zA-Z0-9 ]/g, '').split(' ').filter(w => w);
+      if (words.length > 1) key = (words[0][0] + words[1][0]).toUpperCase();
+      else key = (words[0] || 'BR').slice(0,2).toUpperCase();
     }
 
     const board = new Board({ 
-        name, 
-        key, 
-        tasks: [] 
+      name, 
+      key, 
+      tasks: [] 
     });
 
     await board.save();
