@@ -1,13 +1,38 @@
 import Task from '../models/Task.model.js';
 import Board from '../models/Board.model.js';
 
-// GET /api/tasks?boardId= - List all tasks for a board
+// GET /api/tasks?boardId=&status=&page=&limit= - List paginated tasks - column wise
 export const getTasks = async (req, res) => {
   try {
-    const { boardId } = req.query;
-    if (!boardId) return res.status(400).json({ error: 'boardId required' });
-    const tasks = await Task.find({ boardId });
-    res.json(tasks);
+    const { boardId, status, assignedTo } = req.query;
+    let { page = 1, limit = 7 } = req.query;
+
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
+
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(limit) || limit < 1) limit = 7;
+
+    if (!boardId && !assignedTo) {
+      return res.status(400).json({ error: 'boardId or assignedTo required' });
+    }
+
+    const filter = {};
+    if (boardId) filter.boardId = boardId;
+    if (status) filter.status = status;
+    if (assignedTo) filter.assignedTo = assignedTo;
+
+    const total = await Task.countDocuments(filter);
+    const tasks = await Task.find(filter)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    res.json({
+      items: tasks,
+      total,
+      page,
+      hasMore: page * limit < total
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tasks' });
   }

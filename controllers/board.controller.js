@@ -4,8 +4,28 @@ import Task from '../models/Task.model.js';
 // GET /api/boards - List all boards
 export const getBoards = async (req, res) => {
   try {
-    const boards = await Board.find().populate('tasks'); 
-    res.json(boards);
+    let { page = 1, limit = 20 } = req.query;
+
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
+    
+    if (isNaN(page) || page < 1) 
+      page = 1;
+    if (isNaN(limit) || limit < 1) 
+      limit = 20;
+
+    const total = await Board.countDocuments();
+    const boards = await Board.find()
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate('tasks');
+
+    res.json({
+      items: boards,
+      total,
+      page,
+      hasMore: page * limit < total
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch boards' });
   }
