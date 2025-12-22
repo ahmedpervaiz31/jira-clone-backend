@@ -72,7 +72,6 @@ export const createTask = async (req, res) => {
     res.status(201).json(savedTask);
 
   } catch (err) {
-    console.error("Task Create Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -111,7 +110,6 @@ export const deleteTask = async (req, res) => {
     res.json({ message: 'Task deleted' });
     
     } catch (err) {
-        console.error("Delete Error:", err.message);
         res.status(500).json({ error: 'Failed to delete task' });
   }
 };
@@ -182,7 +180,6 @@ export const moveTask = async (req, res) => {
     await task.save();
     res.json(task);
   } catch (err) {
-    console.error('Move Task Error:', err.message);
     res.status(500).json({ error: 'Failed to move task' });
   }
 };
@@ -190,8 +187,8 @@ export const moveTask = async (req, res) => {
 // GET /api/tasks/search?q=keyword
 export const searchTasks = async (req, res) => {
   try {
-    const q = req.query.q || '';
-    const regex = new RegExp(q, 'i');
+    const query = req.query.q || '';
+    const regex = new RegExp(query, 'i');
     const filter = { 
       $or: [
         { title: regex }, { description: regex },  
@@ -207,7 +204,6 @@ export const searchTasks = async (req, res) => {
     const results = await Task.find(filter).limit(20);
     res.json(results);
   } catch (err) {
-    console.error("Search error", err);
     res.status(500).json({ error: 'Search failed' });
   }
 };
@@ -221,5 +217,18 @@ export const getTaskById = async (req, res) => {
     res.json(task);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch task' });
+  }
+};
+
+// GET /api/tasks/assigned/:userId - Get all tasks assigned to a user
+export const getTasksByAssignee = async (req, res) => {
+  try {
+    const { username } = req.params;
+    if (!username) return res.status(400).json({ error: 'username required' });
+    
+    const tasks = await Task.find({ assignedTo: username });
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch assigned tasks' });
   }
 };

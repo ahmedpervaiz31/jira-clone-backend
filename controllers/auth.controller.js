@@ -29,7 +29,6 @@ export const register = async (req, res) => {
     const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: user._id, username: user.username } });
   } catch (err) {
-    console.error('REGISTER ERROR', err);
     res.status(500).json({ error: 'server error' });
   }
 };
@@ -50,5 +49,17 @@ export const login = async (req, res) => {
     res.json({ token, user: { id: user._id, username: user.username } });
   } catch (err) {
     res.status(500).json({ error: 'server error' });
+  }
+};
+
+export const searchUsers = async (req, res) => {
+  try {
+    const query = req.query.q || '';
+    const regex = new RegExp(query, 'i');
+    const users = await User.find({ username: regex }).select('username _id').limit(20);
+    res.json(users);
+  }
+  catch (err) {
+    res.status(500).json({ error: 'Search failed' });
   }
 };

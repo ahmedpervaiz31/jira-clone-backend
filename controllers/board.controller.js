@@ -48,7 +48,6 @@ export const createBoard = async (req, res) => {
     res.status(201).json(board);
 
   } catch (err) {
-    console.error("Board Create Error:", err.message); 
     res.status(500).json({ error: err.message });
   }
 };
@@ -56,8 +55,8 @@ export const createBoard = async (req, res) => {
 // GET /api/boards/search?q=keyword - search boards by name or key
 export const searchBoards = async (req, res) => {
   try {
-    const q = req.query.q || '';
-    const regex = new RegExp(q, 'i');
+    const query = req.query.q || '';
+    const regex = new RegExp(query, 'i');
     const filter = { $or: [{ name: regex }, { key: regex }] };
 
     const results = await Board.find(filter).limit(20);
@@ -81,7 +80,8 @@ export const deleteBoard = async (req, res) => {
         await Task.deleteMany({ _id: { $in: board.tasks } });
       }
     } catch (cleanupErr) {
-      console.error('Failed to delete tasks for board:', cleanupErr.message);
+      res.status(500).json({ error: 'Board deleted but failed to delete associated tasks' });
+      return;
     }
 
     res.json({ message: 'Board and its tasks deleted' });

@@ -100,105 +100,85 @@ All responses are JSON. Protected endpoints require `Authorization: Bearer <toke
 - GET `/health`
   - Response: `{ "status": "ok" }`
 
-### Authentication
+### Authentication & User Search
 
 Files: [routes/auth.routes.js](routes/auth.routes.js), [controllers/auth.controller.js](controllers/auth.controller.js)
 
-- POST `/api/auth/register`
-  - Purpose: create a new user
-  - Headers: `Content-Type: application/json`
-  - Body:
+- `POST /api/auth/register` — Register a new user
+- `POST /api/auth/login` — Login and get JWT
+- `GET /api/auth/me` — Get current user (protected)
+- `GET /api/auth/users?q=keyword` — Search users by username (for assignment/autocomplete)
 
-    ```json
-    { "username": "alice", "password": "secret" }
-    ```
+Example response for GET `/api/auth/users?q=ali`:
 
-  - Success (201):
-
-    ```json
-    {
-      "token": "<jwt>",
-      "user": { "id": "<mongo_id>", "username": "alice" }
-    }
-    ```
-
-  - Errors:
-    - `400` when username/password missing
-    - `409` when username already exists
-    - `500` on unexpected server errors
-
-- POST `/api/auth/login`
-  - Purpose: return JWT for valid credentials
-  - Body: same shape as register
-  - Success (200): same shape as register
-  - Errors: `400` missing fields, `401` invalid credentials
-
-- GET `/api/auth/me`
-  - Headers: `Authorization: Bearer <token>`
-  - Success: `{ "user": { "id": "<mongo_id>", "username": "alice" } }`
-
-### Protected test route
-
-- GET `/api/protected`
-  - Purpose: quick endpoint for Postman/curl to validate tokens
-  - Headers: `Authorization: Bearer <token>`
-  - Success: `{ "user": { ...decoded token payload... } }`
+```json
+[
+  { "_id": "...", "username": "alice" },
+  { "_id": "...", "username": "alina" }
+]
+```
 
 ### Boards
 
 Files: [routes/board.routes.js](routes/board.routes.js), [controllers/board.controller.js](controllers/board.controller.js)
 
-- GET `/api/boards`
-  - Purpose: list boards (currently returns all boards)
-  - Headers: `Authorization: Bearer <token>`
-  - Success: array of board objects:
+- `GET /api/boards` — List all boards (protected)
+- `GET /api/boards/search?q=keyword` — Search boards by name or key (protected)
+- `GET /api/boards/:id` — Get a single board by ID (protected)
+- `POST /api/boards` — Create a board (protected)
+- `DELETE /api/boards/:id` — Delete a board by Mongo `_id` (protected, also deletes all its tasks)
 
-    ```json
-    [ { "_id": "...", "name": "My Board", "key": "MB", "tasks": [ {"id":"...","title":"...","displayId":"MB-1"}, {"id":"...","title":"...","displayId":"MB-2"} ] } ]
-    ```
+Example response for GET `/api/boards`:
 
-- POST `/api/boards`
-  - Body:
-    ```json
-    { "name": "New Board", "key": "NB" }
-    ```
-  - Success (201): created board object
-
-- DELETE `/api/boards/:id`
-  - Delete a board by Mongo `_id`.
+```json
+[
+  {
+    "id": "...",
+    "name": "My Board",
+    "key": "MB",
+    "tasks": [
+      {"id": "...", "title": "...", "displayId": "MB-1"},
+      {"id": "...", "title": "...", "displayId": "MB-2"}
+    ]
+  }
+]
+```
 
 ### Tasks
 
 Files: [routes/task.routes.js](routes/task.routes.js), [controllers/task.controller.js](controllers/task.controller.js)
 
-- GET `/api/tasks?boardId=<boardId>`
-  - Purpose: list tasks for a board
-  - Query param: `boardId` (required)
-  - Success: array of task objects
+- `GET /api/tasks?boardId=<boardId>` — List all tasks for a board (protected)
+- `GET /api/tasks/search?q=keyword&boardId=<id>` — Search tasks by title, description, displayId, or assignedTo (optionally filter by board, protected)
+- `GET /api/tasks/assigned/:username` — Get all tasks assigned to a user (protected)
+- `GET /api/tasks/:id` — Get a single task by ID (protected)
+- `POST /api/tasks` — Create a new task (protected)
+- `PUT /api/tasks/:id` — Update a task (edit, move, reorder, protected)
+- `PUT /api/tasks/:id/move` — Move a task between statuses and reorder (protected)
+- `DELETE /api/tasks/:id` — Delete a task (protected, also removes from board)
 
-- POST `/api/tasks`
-  - Body example:
-    ```json
-    {
-      "title": "Fix bug",
-      "status": "to_do",
-      "boardId": "<board_mongo_id>",
-      "description": "...",
-      "assignedTo": "bob",
-      "dueDate": "2025-12-31",
-      "order": 1
-    }
-    ```
-  - Notes: The server now generates and persists a human-friendly `displayId` for each created task (e.g. `AB-1`). The backend computes `displayNumber` using a monotonic counter stored on the parent `Board` (`nextDisplayNumber`) so deleted tasks do not cause display numbers to be reused.
-  - Success (201): created task object (includes `_id`, `displayId`, and `createdAt`)
+Example response for GET `/api/tasks/assigned/alice`:
 
-- PUT `/api/tasks/:id`
-  - Path param: `id` — currently controller updates by custom `id` field if present; prefer using Mongo `_id`.
-  - Body: partial fields to update
+```json
+[
+  {
+    "id": "...",
+    "title": "Fix bug",
+    "status": "to_do",
+    "boardId": "...",
+    "assignedTo": "alice",
+    "description": "...",
+    "dueDate": "2025-12-31",
+    "createdAt": "2025-12-22T12:00:00.000Z",
+    "order": 1,
+    "displayId": "MB-1"
+  }
+]
+```
 
-- DELETE `/api/tasks/:id`
-  - Deletes task by id (see note about `_id` vs custom id below).
-  - Notes: Deleting a task also removes its ObjectId reference from the parent board's `tasks` array.
+### Protected test route
+
+- `GET /api/protected` — Quick endpoint for Postman/curl to validate tokens (protected)
 
 ---
 
@@ -206,6 +186,7 @@ Files: [routes/task.routes.js](routes/task.routes.js), [controllers/task.control
 
 - Boards and Tasks use Mongo `_id` as primary identifiers. `Task.boardId` is an ObjectId referencing `Board`.
 - CORS is configured to allow `FRONTEND_URL` and `Authorization` header.
+- Deleting a board also deletes all its tasks (cascading delete).
 
 ---
 
@@ -240,6 +221,28 @@ curl -X POST http://localhost:4000/api/boards \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"name":"My Board","key":"MB"}'
+```
+
+# New endpoint examples
+
+Search tasks:
+```bash
+curl http://localhost:4000/api/tasks/search?q=bug -H "Authorization: Bearer <TOKEN>"
+```
+
+Get tasks assigned to a user:
+```bash
+curl http://localhost:4000/api/tasks/assigned/alice -H "Authorization: Bearer <TOKEN>"
+```
+
+Search boards:
+```bash
+curl http://localhost:4000/api/boards/search?q=frontend -H "Authorization: Bearer <TOKEN>"
+```
+
+Search users:
+```bash
+curl http://localhost:4000/api/auth/users?q=ali
 ```
 
 ---

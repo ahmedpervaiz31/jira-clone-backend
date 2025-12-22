@@ -13,5 +13,6 @@ router.put('/:id/move', taskController.moveTask);
 router.put('/:id', taskController.updateTask);
 router.delete('/:id', taskController.deleteTask);
 router.get('/:id', taskController.getTaskById);
+router.get('/assigned/:username', taskController.getTasksByAssignee);
 
 export default router;
