@@ -5,7 +5,7 @@ import Board from '../models/Board.model.js';
 export const getTasks = async (req, res) => {
   try {
     const { boardId, status, assignedTo } = req.query;
-    let { page = 1, limit = 7 } = req.query;
+    let { page = 1, limit = 12 } = req.query;
 
     page = parseInt(page, 10);
     limit = parseInt(limit, 10);
