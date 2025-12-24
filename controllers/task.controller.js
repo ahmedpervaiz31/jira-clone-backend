@@ -108,8 +108,6 @@ export const updateTask = async (req, res) => {
     const update = req.body;
 
     delete update.boardId; 
-    // delete update.order;
-
     const task = await Task.findByIdAndUpdate(id, update, { new: true });
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
