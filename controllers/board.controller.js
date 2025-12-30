@@ -9,19 +9,24 @@ export const getBoards = async (req, res) => {
     page = parseInt(page, 10);
     limit = parseInt(limit, 10);
     
-    if (isNaN(page) || page < 1) 
-      page = 1;
-    if (isNaN(limit) || limit < 1) 
-      limit = 20;
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(limit) || limit < 1) limit = 20;
 
     const total = await Board.countDocuments();
+    
     const boards = await Board.find()
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('tasks');
+      .select('-__v'); 
+
+    const boardsWithCounts = boards.map(b => ({
+      ...b.toObject(),
+      taskCount: b.tasks ? b.tasks.length : 0, 
+      tasks: []
+    }));
 
     res.json({
-      items: boards,
+      items: boardsWithCounts,
       total,
       page,
       hasMore: page * limit < total

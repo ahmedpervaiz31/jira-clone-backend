@@ -52,14 +52,3 @@ export const login = async (req, res) => {
   }
 };
 
-export const searchUsers = async (req, res) => {
-  try {
-    const query = req.query.q || '';
-    const regex = new RegExp(query, 'i');
-    const users = await User.find({ username: regex }).select('username _id').limit(20);
-    res.json(users);
-  }
-  catch (err) {
-    res.status(500).json({ error: 'Search failed' });
-  }
-};
