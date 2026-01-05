@@ -49,7 +49,7 @@ export const createTask = async (req, res) => {
       return res.status(400).json({ error: 'title, status, and boardId required' });
     }
 
-    if (Array.isArray(dependencies) && dependencies.length > 0) {
+    if (Array.isArray(dependencies)) {
       const valid = await validateDependencies(null, dependencies);
       if (!valid) {
         return res.status(400).json({ error: 'Invalid dependencies' });
@@ -57,7 +57,9 @@ export const createTask = async (req, res) => {
     }
 
     const { finalOrder, computedDisplayId, board, error } = await computeTaskCreationFields({ boardId, status, order });
-    if (error) return res.status(400).json({ error });
+    if (error) {
+      return res.status(400).json({ error });
+    }
 
     const task = new Task({
       title,
@@ -81,6 +83,7 @@ export const createTask = async (req, res) => {
     res.status(201).json(savedTask);
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -114,7 +117,6 @@ export const updateTask = async (req, res) => {
         return res.json(updated);
       }
     }
-    // Fallback to default update
     const task = await Task.findByIdAndUpdate(id, update, { new: true });
     if (!task) return res.status(404).json({ error: 'Task not found' });
     res.json(task);
@@ -128,8 +130,12 @@ export const deleteTask = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const task = await Task.findByIdAndDelete(id);
-    if (!task) return res.status(404).json({ error: 'Task not found' });
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    await Task.deleteOne({ _id: id });
 
     await Board.findByIdAndUpdate(
       task.boardId,
@@ -137,9 +143,8 @@ export const deleteTask = async (req, res) => {
     );
 
     res.json({ message: 'Task deleted' });
-    
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to delete task' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete task' });
   }
 };
 

@@ -1,8 +1,11 @@
 import Task from '../models/Task.model.js';
 
 export async function canMoveTask(task, newStatus) {
-  if ((newStatus === 'in_progress' || newStatus === 'done') && !(await dependenciesAreReady(task))) {
+  if ((newStatus === 'in_progress' || newStatus === 'done') && !(await dependenciesAreReady(task, newStatus))) {
     return { ok: false, error: 'Cannot move task: dependencies are not in progress or done.' };
+  }
+  if (newStatus === 'done' && (await parentInProgress(task))) {
+    return { ok: false, error: 'Cannot move task to done: a parent is still in progress.' };
   }
   if ((newStatus === 'to_do' || newStatus === 'in_progress') && (await hasChildFurtherAlong(task._id, newStatus))) {
     return { ok: false, error: 'Cannot move task: one or more dependent tasks are further along.' };
@@ -10,10 +13,17 @@ export async function canMoveTask(task, newStatus) {
   return { ok: true };
 }
 
-export async function dependenciesAreReady(task) {
-  if (!Array.isArray(task.dependencies) || task.dependencies.length === 0) 
-    return true;
+async function parentInProgress(task) {
+  if (!Array.isArray(task.dependencies) || task.dependencies.length === 0) return false;
   const parentTasks = await Task.find({ _id: { $in: task.dependencies } });
+  return parentTasks.some(pt => pt.status === 'in_progress');
+}
+export async function dependenciesAreReady(task, newStatus) {
+  if (!Array.isArray(task.dependencies) || task.dependencies.length === 0) return true;
+  const parentTasks = await Task.find({ _id: { $in: task.dependencies } });
+  if (newStatus === 'done') {
+    return parentTasks.every(pt => pt.status === 'done');
+  }
   return parentTasks.every(pt => pt.status === 'in_progress' || pt.status === 'done');
 }
 
