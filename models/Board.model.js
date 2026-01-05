@@ -6,6 +6,8 @@ const boardSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   tasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }], 
   nextDisplayNumber: { type: Number, default: 0 },
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  flag: { type: String, enum: ['private', 'public'], default: 'public' },
 });
 
 boardSchema.set('toJSON', {

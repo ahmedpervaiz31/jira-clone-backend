@@ -13,7 +13,6 @@ router.post('/', taskController.createTask);
 router.put('/:id/move', taskController.moveTask);
 router.post('/batch-move', taskController.batchMoveTasks);
 router.put('/:id', taskController.updateTask);
-router.get('/:id', taskController.getTaskById);
 
 router.delete('/:id', taskController.deleteTask);
 router.get('/:id', taskController.getTaskById);
