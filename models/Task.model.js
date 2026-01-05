@@ -10,7 +10,7 @@ const taskSchema = new mongoose.Schema({
     default: 'to_do'
   },
   boardId: { type: mongoose.Schema.Types.ObjectId, ref: 'Board', required: true }, 
-  
+  dependencies: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
   assignedTo: { type: String },
   description: { type: String },
   dueDate: { type: String, default: null },
