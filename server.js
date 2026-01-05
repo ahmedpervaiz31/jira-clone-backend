@@ -2,10 +2,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { connectDB } from './database/Mongo.database.js';
+import { authenticate } from './middleware/auth.middleware.js';
+
 import authRoutes from './routes/auth.routes.js';
 import boardRoutes from './routes/board.routes.js';
 import taskRoutes from './routes/task.routes.js';
-import { authenticate } from './middleware/auth.middleware.js';
+import userRoutes from './routes/user.routes.js';
 
 dotenv.config();
 
@@ -23,10 +25,10 @@ app.use(cors({
 
 app.options('*', cors());
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/users', userRoutes);
 
 app.get('/api/protected', authenticate, (req, res) => {
   res.json({ user: req.user });

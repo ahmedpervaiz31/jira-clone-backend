@@ -9,19 +9,24 @@ export const getBoards = async (req, res) => {
     page = parseInt(page, 10);
     limit = parseInt(limit, 10);
     
-    if (isNaN(page) || page < 1) 
-      page = 1;
-    if (isNaN(limit) || limit < 1) 
-      limit = 20;
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(limit) || limit < 1) limit = 20;
 
     const total = await Board.countDocuments();
+    
     const boards = await Board.find()
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('tasks');
+      .select('-__v'); 
+
+    const boardsWithCounts = boards.map(b => ({
+      ...b.toObject(),
+      taskCount: b.tasks ? b.tasks.length : 0, 
+      tasks: []
+    }));
 
     res.json({
-      items: boards,
+      items: boardsWithCounts,
       total,
       page,
       hasMore: page * limit < total
@@ -90,18 +95,15 @@ export const searchBoards = async (req, res) => {
 export const deleteBoard = async (req, res) => {
   try {
     const { id } = req.params;
-    const board = await Board.findByIdAndDelete(id);
+    const board = await Board.findById(id);
     if (!board) {
       return res.status(404).json({ error: 'Board not found' });
     }
 
-    try {
-      if (Array.isArray(board.tasks) && board.tasks.length > 0) {
-        await Task.deleteMany({ _id: { $in: board.tasks } });
-      }
-    } catch (cleanupErr) {
-      res.status(500).json({ error: 'Board deleted but failed to delete associated tasks' });
-      return;
+    await Board.deleteOne({ _id: id });
+
+    if (Array.isArray(board.tasks) && board.tasks.length > 0) {
+      await Task.deleteMany({ _id: { $in: board.tasks } });
     }
 
     res.json({ message: 'Board and its tasks deleted' });
