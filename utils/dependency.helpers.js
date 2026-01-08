@@ -37,18 +37,18 @@ export async function hasCircularDependency(taskId, dependencies) {
   const visited = new Set();
   async function dfs(currentId) {
     if (!currentId) 
-        return false;
+      return false;
     if (currentId.toString() === taskId?.toString()) 
-        return true;
+      return true;
     if (visited.has(currentId.toString())) 
-        return false;
+      return false;
     visited.add(currentId.toString());
     const task = await Task.findById(currentId);
     if (!task || !Array.isArray(task.dependencies)) 
-        return false;
+      return false;
     for (const depId of task.dependencies) {
       if (await dfs(depId)) 
-        return true;
+      return true;
     }
     return false;
   }

@@ -11,7 +11,6 @@ router.get('/search', taskController.searchTasks);
 router.post('/', taskController.createTask);
 
 router.put('/:id/move', taskController.moveTask);
-router.post('/batch-move', taskController.batchMoveTasks);
 router.put('/:id', taskController.updateTask);
 
 router.delete('/:id', taskController.deleteTask);
