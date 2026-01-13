@@ -4,6 +4,7 @@ import { hasCircularDependency, validateDependencies, canMoveTask } from '../uti
 import { getTaskOr404, updateTaskStatusAndOrder, buildTaskQueryFilter, createAndSaveTask, updateTaskWithDependencies, 
   moveTaskToStatus, buildTaskSearchFilter } from '../utils/task.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
+import { io } from '../server.js';
 
 // GET /api/tasks - List tasks 
 export const getTasks = asyncHandler(async (req, res) => {
@@ -38,6 +39,12 @@ export const createTask = asyncHandler(async (req, res) => {
     }
     return res.status(400).json({ error });
   }
+  if (task && task.boardId) {
+    io.to(task.boardId.toString()).emit('task:created', {
+      boardId: task.boardId.toString(),
+      userId: req.user?.id || req.user?._id
+    });
+  }
   res.status(201).json(task);
 });
 
@@ -56,6 +63,12 @@ export const updateTask = asyncHandler(async (req, res) => {
     res
   });
   if (result.error) return res.status(400).json({ error: result.error });
+  if (result && result.task && result.task.boardId) {
+    io.to(result.task.boardId.toString()).emit('task:updated', {
+      boardId: result.task.boardId.toString(),
+      userId: req.user?.id || req.user?._id
+    });
+  }
   res.json(result.task);
 });
 
@@ -75,6 +88,12 @@ export const deleteTask = asyncHandler(async (req, res) => {
     { $pull: { tasks: task._id } }
   );
 
+  if (task && task.boardId) {
+    io.to(task.boardId.toString()).emit('task:deleted', {
+      boardId: task.boardId.toString(),
+      userId: req.user?.id || req.user?._id
+    });
+  }
   res.json({ message: 'Task deleted' });
 });
 
@@ -102,6 +121,12 @@ export const moveTask = asyncHandler(async (req, res) => {
       return res.status(503).json({ error: 'Task move failed due to order collision. Board was rebalanced, please retry.' });
     }
     return res.status(400).json({ error: result.error });
+  }
+  if (result && result.task && result.task.boardId) {
+    io.to(result.task.boardId.toString()).emit('task:moved', {
+      boardId: result.task.boardId.toString(),
+      userId: req.user?.id || req.user?._id
+    });
   }
   res.json(result.task);
 });

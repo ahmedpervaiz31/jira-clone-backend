@@ -2,6 +2,7 @@ import Board from '../models/Board.model.js';
 import Task from '../models/Task.model.js';
 import { generateBoardKey, getBoardFilter, resolveBoardMembers, formatBoardsWithCounts } from '../utils/board.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
+import { io } from '../server.js';
 
 // GET /api/boards - List all boards
 export const getBoards = asyncHandler(async (req, res) => {
@@ -47,6 +48,10 @@ export const createBoard = asyncHandler(async (req, res) => {
   const board = new Board({ name, key, tasks: [], flag, members });
 
   await board.save();
+    io.emit('board:created', {
+      boardId: board._id.toString(),
+      userId: req.user?.id || req.user?._id
+    });
   res.status(201).json(board);
 });
 
@@ -74,5 +79,16 @@ export const deleteBoard = asyncHandler(async (req, res) => {
     await Task.deleteMany({ _id: { $in: board.tasks } });
   }
 
+  if (board && board._id) {
+      io.to(board._id.toString()).emit('board:deleted', {
+        boardId: board._id.toString(),
+        userId: req.user?.id || req.user?._id
+      });
+  }
+    io.emit('board:deleted', {
+      boardId: board._id.toString(),
+      deleted: true,
+      userId: req.user?.id || req.user?._id
+    });
   res.json({ message: 'Board and its tasks deleted' });
 });

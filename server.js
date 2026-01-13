@@ -1,6 +1,9 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
+import { handleBoardPresence } from './socket/boardPresence.js';
 import { connectDB } from './database/Mongo.database.js';
 import { authenticate } from './middleware/auth.middleware.js';
 
@@ -43,10 +46,27 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: err.message });
 });
 
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: FRONTEND_URL,
+    credentials: true,
+  },
+});
+
+
+io.on('connection', (socket) => {
+  console.log('A user connected:', socket.id);
+  handleBoardPresence(io, socket);
+});
+
+export { io };
+
 connectDB()
   .then(() => {
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`Socket.IO server running on port ${PORT}`);
     });
   })
   .catch((err) => {
