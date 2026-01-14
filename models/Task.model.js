@@ -16,7 +16,7 @@ const taskSchema = new mongoose.Schema({
   dueDate: { type: String, default: null },
   displayId: { type: String },
   createdAt: { type: Date, default: Date.now }, 
-  order: { type: Number },
+  order: { type: String, required: true },
 });
 
 taskSchema.set('toJSON', {
@@ -27,5 +27,7 @@ taskSchema.set('toJSON', {
     return ret;
   }
 });
+
+taskSchema.index({ boardId: 1, status: 1, order: 1 }, { unique: true });
 
 export default mongoose.model('Task', taskSchema);

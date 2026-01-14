@@ -11,7 +11,6 @@ router.get('/search', taskController.searchTasks);
 router.post('/', taskController.createTask);
 
 router.put('/:id/move', taskController.moveTask);
-router.post('/batch-move', taskController.batchMoveTasks);
 router.put('/:id', taskController.updateTask);
 
 router.delete('/:id', taskController.deleteTask);
@@ -20,5 +19,7 @@ router.get('/assigned/:username', taskController.getTasksByAssignee);
 router.post('/:id/dependencies', dependencyController.addTaskDependencies);
 router.delete('/:id/dependencies/:depId', dependencyController.removeTaskDependency);
 router.post('/batch', taskController.getTasksByIds);
+
+router.get('/:id/dependencies', dependencyController.getTaskDependencies);
 
 export default router;
