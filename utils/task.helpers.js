@@ -52,19 +52,18 @@ export async function createAndSaveTask({ title, status, boardId, description, a
       if (err.code === 11000 && err.keyPattern && err.keyPattern.order) {
         await rebalanceBoard(boardId);
 
-		const refreshedLast = await Task.findOne({ boardId, status })
-		.sort({ order: -1 })
-		.select('order')
-		.lean();
+        const refreshedLast = await Task.findOne({ boardId, status })
+        .sort({ order: -1 })
+        .select('order')
+        .lean();
 
-		finalOrder = refreshedLast
-		? generateRank(refreshedLast.order, null)
-		: generateRank(null, null);
+        finalOrder = refreshedLast
+        ? generateRank(refreshedLast.order, null)
+        : generateRank(null, null);
 
         newTask.order = finalOrder;
         savedTask = await newTask.save();
       } else {
-        console.error('Task Creation Error:', err);
         return { error: 'Failed to create task' };
       }
     }
@@ -76,7 +75,6 @@ export async function createAndSaveTask({ title, status, boardId, description, a
 
     return { task: savedTask };
   } catch (err) {
-    console.error('Task Creation Error:', err);
     return { error: 'Failed to create task' };
   }
 }
@@ -151,7 +149,6 @@ export async function moveTaskToStatus({ id, targetStatus, prevRank, nextRank, g
 
         updated = await updateTaskStatusAndOrder(refreshedTask, targetStatus, retryRank);
       } else {
-        console.error('Task Move Error:', err);
         return { error: 'Failed to move task' };
       }
     }

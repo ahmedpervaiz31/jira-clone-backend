@@ -25,3 +25,6 @@ yarn.lock
 *.njsproj
 *.sln
 *.sw?
+
+# Dependency directories
+node_modules/
