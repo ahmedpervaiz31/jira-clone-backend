@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .env
+package.json
 package-lock.json
 yarn.lock
 
