@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 .env
+.env.*.local
+# Dependency directories
+.pnp
+.pnp.js
+package.json
 package-lock.json
 yarn.lock
 
