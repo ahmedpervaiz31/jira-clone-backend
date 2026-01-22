@@ -22,9 +22,11 @@ export async function searchRag(req, res) {
                 debug: { hasUser: !!req.user } 
             });
         }
-        const { boards, tasks, users } = await ragSearch(query, userId, topK);
+        const { boards, tasks, users, boardSummaries, globalSummaryText } = await ragSearch(query, userId, topK);
 
         const contextChunks = [
+            globalSummaryText,
+            ...boardSummaries.map(b => b.summary),
             ...boards.map(b => `Board: ${b.name} (${b.key})`),
             ...tasks.map(t => `Task: ${t.title} [${t.status}]`),
             ...users.map(u => `User: ${u.username}`)
@@ -34,7 +36,7 @@ export async function searchRag(req, res) {
         const answer = await askGroq(sanitizedQuery, contextChunks);
         const processedAnswer = processGroqResponse(answer);
 
-        res.json({ answer: processedAnswer, context: { boards, tasks, users } });
+        res.json({ answer: processedAnswer, context: { boards, tasks, users, boardSummaries, globalSummaryText } });
     } catch (err) {
         res.status(500).json({ error: 'RAG search failed', details: err.message });
     }
