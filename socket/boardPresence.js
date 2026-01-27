@@ -1,7 +1,4 @@
-
-// boardUsers: Map<boardId, Map<userId, userObject>>
 const boardUsers = new Map();
-
 
 function broadcastUserList(io, boardId) {
   const users = Array.from((boardUsers.get(boardId) && boardUsers.get(boardId).values()) || []);

@@ -1,3 +1,4 @@
+import { syncUserToRagIndex } from '../middleware/user.rag.middleware.js';
 import User from '../models/User.model.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -22,6 +23,7 @@ export const register = asyncHandler(async (req, res) => {
   const hash = await bcrypt.hash(password, 10);
   const user = await User.create({ username, password: hash });
 
+  await syncUserToRagIndex(user, 'upsert');
   const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: { id: user._id, username: user.username } });
 });

@@ -5,6 +5,7 @@ import { getTaskOr404, updateTaskStatusAndOrder, buildTaskQueryFilter, createAnd
   moveTaskToStatus, buildTaskSearchFilter } from '../utils/task.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
 import { io } from '../server.js';
+import { syncTaskToRagIndex } from '../middleware/task.rag.middleware.js';
 
 // GET /api/tasks - List tasks 
 export const getTasks = asyncHandler(async (req, res) => {
@@ -45,6 +46,9 @@ export const createTask = asyncHandler(async (req, res) => {
       userId: req.user?.id || req.user?._id
     });
   }
+  if (task) {
+      await syncTaskToRagIndex(task, 'upsert');
+  }
   res.status(201).json(task);
 });
 
@@ -68,6 +72,9 @@ export const updateTask = asyncHandler(async (req, res) => {
       boardId: result.task.boardId.toString(),
       userId: req.user?.id || req.user?._id
     });
+  }
+  if (result && result.task) {
+      await syncTaskToRagIndex(result.task, 'upsert');
   }
   res.json(result.task);
 });
@@ -93,6 +100,9 @@ export const deleteTask = asyncHandler(async (req, res) => {
       boardId: task.boardId.toString(),
       userId: req.user?.id || req.user?._id
     });
+  }
+  if (task) {
+      await syncTaskToRagIndex(task, 'delete');
   }
   res.json({ message: 'Task deleted' });
 });
@@ -127,6 +137,9 @@ export const moveTask = asyncHandler(async (req, res) => {
       boardId: result.task.boardId.toString(),
       userId: req.user?.id || req.user?._id
     });
+  }
+  if (result && result.task) {
+    await syncTaskToRagIndex(result.task, 'upsert');
   }
   res.json(result.task);
 });
