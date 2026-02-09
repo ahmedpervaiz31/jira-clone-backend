@@ -1,4 +1,4 @@
-import { syncUserToRagIndex } from '../middleware/user.rag.middleware.js';
+import { syncUserToRagIndex } from '../middleware/user.middleware.js';
 import User from '../models/User.model.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';

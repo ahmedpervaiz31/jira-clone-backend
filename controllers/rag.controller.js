@@ -1,6 +1,8 @@
 import { ragSearch } from '../../jira-rag/search.js';
 import { batchIndexer } from '../../jira-rag/pipeline.js';
 import { askGroq, processGroqResponse } from '../../jira-rag/groqClient.js';
+import { formatContextChunks } from '../utils/rag.helpers.js';
+import Board from '../models/Board.model.js';
 
 // POST /api/rag/index/batch - batch indexer
 export async function batchIndex(req, res) {
@@ -18,40 +20,32 @@ export async function searchRag(req, res) {
     try {
         const { query, topK = 10, boardId, history = [] } = req.body;
 
-        const { boards, tasks, users, boardSummaries, globalSummaryText, searchQueryUsed } = 
-            await ragSearch(query, userId, boardId, topK, history); 
+        let activeBoardName = null;
+        if (boardId) {
+            try {
+                const board = await Board.findById(boardId);
+                if (board) activeBoardName = board.name;
+            } catch (err) {
+                console.error("Failed to fetch active board name for id", boardId, ":", err);
+            }
+        }
 
-        const contextChunks = [
-            globalSummaryText,
-            ...boardSummaries.map(b => 
-                `### Board Overview: ${b.name}
-                - Statistics: Total: ${b.stats.total} | To Do: ${b.stats.toDo} | In Progress: ${b.stats.inProgress} | Done: ${b.stats.done}
-                - All Task Titles: ${b.taskTitles.join(', ')}`
-            ),
-            ...boards.map(b => `Board Info: ${b.name} (${b.key})`), 
-            ...tasks.map((t, index) => {
-                const parentBoard = boards.find(b => b._id.toString() === t.boardId.toString());
-                const boardName = parentBoard ? parentBoard.name : 'Unknown';
-                
-                const assignee = users.find(u => u.username === t.assignedTo);
-                const assignedTo = assignee ? assignee.username : 'Unassigned';
+        const { boards, tasks, users, boardSummaryText, globalSummaryText, searchQueryUsed } =
+            await ragSearch(query, boardId, topK, history, activeBoardName);
 
-                return `[Task Detail #${index + 1}] Title: ${t.title}. Board: ${boardName}. Status: ${t.status}. Due: ${t.dueDate || 'No date'}. Assigned to: ${assignedTo}. Description: ${t.description || 'N/A'}`;}),
-            ...users.map(u => `User Available: ${u.username}`) 
-        ].filter(Boolean);
+        const contextChunks = formatContextChunks({ boards, tasks, users, boardSummaryText, globalSummaryText });
 
-        const activeBoardName = boards.find(b => b._id.toString() === boardId)?.name || null;
-
-        const answer = await askGroq(query, contextChunks, { 
+        const answer = await askGroq(query, contextChunks, {
             activeBoardName,
-            history, 
-            target: searchQueryUsed 
-        }); 
+            history,
+            target: searchQueryUsed,
+            currentDate: new Date().toISOString()
+        });
 
-        res.json({ 
-            answer: processGroqResponse(answer), 
-            context: { boards, tasks, users, boardSummaries, globalSummaryText },
-            searchQueryUsed 
+        res.json({
+            answer: processGroqResponse(answer),
+            context: { boards, tasks, users, boardSummaryText, globalSummaryText },
+            searchQueryUsed
         });
 
     } catch (err) {

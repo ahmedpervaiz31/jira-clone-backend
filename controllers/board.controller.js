@@ -1,4 +1,4 @@
-import { syncBoardToRagIndex } from '../middleware/board.rag.middleware.js';
+import { syncBoardToRagIndex } from '../middleware/board.middleware.js';
 import Board from '../models/Board.model.js';
 import Task from '../models/Task.model.js';
 import { generateBoardKey, getBoardFilter, resolveBoardMembers, formatBoardsWithCounts } from '../utils/board.helpers.js';

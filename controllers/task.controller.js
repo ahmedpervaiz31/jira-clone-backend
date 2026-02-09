@@ -5,7 +5,7 @@ import { getTaskOr404, updateTaskStatusAndOrder, buildTaskQueryFilter, createAnd
   moveTaskToStatus, buildTaskSearchFilter } from '../utils/task.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
 import { io } from '../server.js';
-import { syncTaskToRagIndex } from '../middleware/task.rag.middleware.js';
+import { syncTaskToRagIndex } from '../middleware/task.middleware.js';
 
 // GET /api/tasks - List tasks 
 export const getTasks = asyncHandler(async (req, res) => {
