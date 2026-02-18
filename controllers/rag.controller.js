@@ -15,7 +15,7 @@ export async function batchIndex(req, res) {
 
 // POST /api/rag/search - RAG search endpoint
 export async function searchRag(req, res) {
-    const user = req.user;
+    const user = req.user || null;
     try {
         const { query, topK = 10, boardId, history = [] } = req.body;
 
@@ -40,7 +40,9 @@ export async function searchRag(req, res) {
                 user,
                 query,
                 history,
-                contextData: { boards, tasks, users, activeBoardName, boardId }
+                contextData: { boards, tasks, users, activeBoardName, boardId },
+                io: req.app.get('socketio'),
+                originalQuery: query
             });
 
             return res.json(agentResponse);

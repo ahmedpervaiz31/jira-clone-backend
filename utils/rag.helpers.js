@@ -25,10 +25,30 @@ export function formatContextChunks(data) {
 const isLikelyName = (id) => id && typeof id === 'string' && !/^[0-9a-fA-F]{24}$/.test(id);
 
 export async function resolveToolArgs(toolName, args, context) {
-    const { boards, tasks, activeBoardName, boardId } = context;
+    const { boards, tasks, activeBoardName, boardId, originalQuery } = context;
 
-    if (isLikelyName(args.boardId)) {
-        const targetName = args.boardId.toLowerCase();
+    const isPlaceholder = (val) => {
+        if (!val || typeof val !== 'string') return false;
+        const lower = val.toLowerCase();
+        return lower.includes("id of") || lower.includes("if exists") || lower.includes("placeholder") || lower.includes("...");
+    };
+
+    if (isLikelyName(args.boardId) || isPlaceholder(args.boardId)) {
+        let targetName = args.boardId;
+
+        if (isPlaceholder(args.boardId)) {
+            const quoteMatch = originalQuery.match(/["']([^"']+)["']/);
+            if (quoteMatch) {
+                targetName = quoteMatch[1];
+            } else {
+                const keywordMatch = originalQuery.match(/(?:delete|remove|board)\s+(?:board\s+)?(?:named\s+)?([a-zA-Z0-9\s]+?)(?:$|\s+and|\s+with)/i);
+                if (keywordMatch) {
+                    targetName = keywordMatch[1].trim();
+                }
+            }
+        }
+
+        targetName = targetName.toLowerCase();
         let resolvedBoardId = null;
 
         const contextBoard = boards.find(b => b.name.toLowerCase() === targetName);
@@ -41,7 +61,7 @@ export async function resolveToolArgs(toolName, args, context) {
         }
 
         if (!resolvedBoardId) {
-            const foundBoards = await searchBoardsHelper(args.boardId);
+            const foundBoards = await searchBoardsHelper(targetName);
             if (foundBoards && foundBoards.length > 0) {
                 resolvedBoardId = foundBoards[0]._id.toString();
             }
@@ -50,12 +70,21 @@ export async function resolveToolArgs(toolName, args, context) {
         if (resolvedBoardId) {
             args.boardId = resolvedBoardId;
         } else {
-            throw new Error(`Board "${args.boardId}" not found.`);
+            throw new Error(`I couldn't find a board named '${targetName}' in the database.`);
         }
     }
 
-    if (isLikelyName(args.id)) {
-        const targetName = args.id;
+    if (isLikelyName(args.id) || isPlaceholder(args.id)) {
+        let targetName = args.id;
+
+        if (isPlaceholder(args.id)) {
+            const quoteMatch = originalQuery.match(/["']([^"']+)["']/);
+            if (quoteMatch) targetName = quoteMatch[1];
+            else {
+                targetName = originalQuery.replace(/delete|remove|task|board/gi, '').trim();
+            }
+        }
+
         let resolvedId = null;
 
         if (toolName.toLowerCase().includes('board')) {
@@ -71,7 +100,9 @@ export async function resolveToolArgs(toolName, args, context) {
                 }
             }
 
-            if (!resolvedId) throw new Error(`Board "${targetName}" not found.`);
+            if (!resolvedId) {
+                throw new Error(`I couldn't find a board named '${targetName}' in the database.`);
+            }
             args.id = resolvedId;
 
         } else {
@@ -87,7 +118,9 @@ export async function resolveToolArgs(toolName, args, context) {
                 }
             }
 
-            if (!resolvedId) throw new Error(`Task "${targetName}" not found.`);
+            if (!resolvedId) {
+                throw new Error(`I couldn't find a task named '${targetName}' in the database.`);
+            }
             args.id = resolvedId;
         }
     }
@@ -127,31 +160,67 @@ export async function getActiveBoardName(boardId) {
     }
 }
 
-export async function handleAgenticActions({ groqResult, user, query, history, contextData }) {
+export async function handleAgenticActions({ groqResult, user, query, history, contextData, io, originalQuery }) {
     const { boards, tasks, users, activeBoardName, boardId } = contextData;
     const results = [];
     const executionLog = [];
+    const processedCalls = new Set();
 
     for (const call of groqResult.toolCalls) {
         const toolName = call.function.name;
         let args = JSON.parse(call.function.arguments);
         const originalArgs = { ...args };
 
+        const callSignature = `${toolName}:${JSON.stringify(args)}`;
+        if (processedCalls.has(callSignature)) {
+            console.log(`[Orchestrator] Skipping duplicate tool call: ${callSignature}`);
+            continue;
+        }
+        processedCalls.add(callSignature);
+
         try {
-            const resolvedArgs = await resolveToolArgs(toolName, args, { boards, tasks, activeBoardName, boardId });
+            const resolvedArgs = await resolveToolArgs(toolName, args, { boards, tasks, activeBoardName, boardId, originalQuery });
 
             const result = await executeToolCall(toolName, resolvedArgs, user);
             results.push(result);
+
+            if (io && result) {
+                const rawUserId = user?.id || user?._id;
+                const userId = rawUserId ? rawUserId.toString() : 'system';
+                const isAgent = true;
+
+                if (toolName === 'createBoard' && result._id) {
+                    io.emit('board:created', { boardId: result._id.toString(), userId, isAgent });
+                } else if (toolName === 'deleteBoard' && result._id) {
+                    io.emit('board:deleted', { boardId: result._id.toString(), userId, isAgent });
+                } else if (['createTask', 'updateTask', 'moveTask', 'deleteTask'].includes(toolName)) {
+                    let eventName = '';
+                    if (toolName === 'createTask') eventName = 'task:created';
+                    if (toolName === 'updateTask') eventName = 'task:updated';
+                    if (toolName === 'moveTask') eventName = 'task:moved';
+                    if (toolName === 'deleteTask') eventName = 'task:deleted';
+
+                    const bId = result.boardId || (result.task && result.task.boardId) || result._id;
+
+                    if (bId && eventName) {
+                        const boardIdStr = bId.toString();
+                        io.to(boardIdStr).emit(eventName, {
+                            boardId: boardIdStr,
+                            userId,
+                            isAgent
+                        });
+                    }
+                }
+            }
 
             executionLog.push({
                 tool: toolName,
                 args: originalArgs,
                 status: "Success",
-                details: result.message || "Action completed"
+                details: result?.message || "Action completed"
             });
 
         } catch (error) {
-            console.error(`[Orchestrator] Resolution/Execution failed for ${toolName}:`, error);
             results.push({ error: error.message, tool: toolName });
 
             executionLog.push({
@@ -163,7 +232,6 @@ export async function handleAgenticActions({ groqResult, user, query, history, c
         }
     }
 
-    // --- SYNTHESIS PASS ---
     const synthesisContext = [
         `User Original Query: ${query}`
     ];

@@ -44,8 +44,8 @@ app.get('/health', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: err.message });
+  console.error(err.stack);
+  res.status(500).json({ message: err.message });
 });
 
 const httpServer = createServer(app);
@@ -55,6 +55,7 @@ const io = new SocketIOServer(httpServer, {
     credentials: true,
   },
 });
+app.set('socketio', io);
 
 
 io.on('connection', (socket) => {

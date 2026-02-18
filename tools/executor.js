@@ -2,8 +2,6 @@ import { createBoardHelper, deleteBoardHelper } from '../utils/board.helpers.js'
 import { createTaskHelper, updateTaskHelper, deleteTaskHelper, moveTaskHelper } from '../utils/task.helpers.js';
 
 export async function executeToolCall(toolName, args, user) {
-    console.log(`[ToolExecutor] Executing ${toolName} with args:`, JSON.stringify(args));
-
     try {
         switch (toolName) {
             // board
@@ -67,7 +65,6 @@ export async function executeToolCall(toolName, args, user) {
                 throw new Error(`Unknown tool: ${toolName}`);
         }
     } catch (error) {
-        console.error(`[ToolExecutor] Error executing ${toolName}:`, error);
         throw new Error(`Tool execution failed: ${error.message}`);
     }
 }

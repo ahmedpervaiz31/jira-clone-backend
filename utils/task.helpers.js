@@ -299,7 +299,7 @@ export async function deleteTaskHelper(id, user) {
 
   await syncTaskToRagIndex(task, 'delete');
 
-  return { message: 'Task deleted' };
+  return { message: 'Task deleted', boardId: task.boardId, taskId: id };
 }
 
 export async function moveTaskHelper({ id, targetStatus, prevRank, nextRank, user }) {
