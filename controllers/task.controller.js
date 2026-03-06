@@ -1,11 +1,9 @@
 import Task from '../models/Task.model.js';
-import Board from '../models/Board.model.js';
-import { hasCircularDependency, validateDependencies, canMoveTask } from '../utils/dependency.helpers.js';
-import { getTaskOr404, updateTaskStatusAndOrder, buildTaskQueryFilter, createAndSaveTask, updateTaskWithDependencies, 
-  moveTaskToStatus, buildTaskSearchFilter } from '../utils/task.helpers.js';
+import {
+  buildTaskQueryFilter, createTaskHelper, updateTaskHelper,
+  deleteTaskHelper, moveTaskHelper, searchTasksHelper, getTaskByIdHelper,
+} from '../utils/task.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
-import { io } from '../server.js';
-import { syncTaskToRagIndex } from '../middleware/task.middleware.js';
 
 // GET /api/tasks - List tasks 
 export const getTasks = asyncHandler(async (req, res) => {
@@ -27,134 +25,69 @@ export const createTask = asyncHandler(async (req, res) => {
   if (!title || !status || !boardId) {
     return res.status(400).json({ error: 'title, status, and boardId required' });
   }
-  if (Array.isArray(dependencies)) {
-    const valid = await validateDependencies(null, dependencies);
-    if (!valid) {
-      return res.status(400).json({ error: 'Invalid dependencies' });
+
+  try {
+    const task = await createTaskHelper({ title, status, boardId, description, assignedTo, dueDate, order, dependencies, user: req.user });
+    res.status(201).json(task);
+  } catch (error) {
+    if (error.message.includes('collision')) {
+      return res.status(503).json({ error: error.message });
     }
+    return res.status(400).json({ error: error.message });
   }
-  const { task, error } = await createAndSaveTask({ title, status, boardId, description, assignedTo, dueDate, order, dependencies });
-  if (error) {
-    if (error === 'Failed to create task') {
-      return res.status(503).json({ error: 'Task creation failed due to order collision.' });
-    }
-    return res.status(400).json({ error });
-  }
-  if (task && task.boardId) {
-    io.to(task.boardId.toString()).emit('task:created', {
-      boardId: task.boardId.toString(),
-      userId: req.user?.id || req.user?._id
-    });
-  }
-  if (task) {
-      await syncTaskToRagIndex(task, 'upsert');
-  }
-  res.status(201).json(task);
 });
 
 // PUT /api/tasks/:id - Update a task (edit, move, reorder)
 export const updateTask = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const update = req.body;
-  const result = await updateTaskWithDependencies({
-    id,
-    update,
-    validateDependencies,
-    hasCircularDependency,
-    getTaskOr404: (id, res) => getTaskOr404(id, res),
-    canMoveTask,
-    updateTaskStatusAndOrder,
-    res
-  });
-  if (result.error) return res.status(400).json({ error: result.error });
-  if (result && result.task && result.task.boardId) {
-    io.to(result.task.boardId.toString()).emit('task:updated', {
-      boardId: result.task.boardId.toString(),
-      userId: req.user?.id || req.user?._id
-    });
+
+  try {
+    const task = await updateTaskHelper({ id, update, user: req.user });
+    res.json(task);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
   }
-  if (result && result.task) {
-      await syncTaskToRagIndex(result.task, 'upsert');
-  }
-  res.json(result.task);
 });
 
 // DELETE /api/tasks/:id - Delete a task
 export const deleteTask = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const task = await Task.findById(id);
-  if (!task) {
-    return res.status(404).json({ error: 'Task not found' });
+  try {
+    await deleteTaskHelper(id, req.user);
+    res.json({ message: 'Task deleted' });
+  } catch (error) {
+    return res.status(404).json({ error: error.message });
   }
-
-  await Task.deleteOne({ _id: id });
-
-  await Board.findByIdAndUpdate(
-    task.boardId,
-    { $pull: { tasks: task._id } }
-  );
-
-  if (task && task.boardId) {
-    io.to(task.boardId.toString()).emit('task:deleted', {
-      boardId: task.boardId.toString(),
-      userId: req.user?.id || req.user?._id
-    });
-  }
-  if (task) {
-      await syncTaskToRagIndex(task, 'delete');
-  }
-  res.json({ message: 'Task deleted' });
 });
 
 // PUT /api/tasks/:id/move - move a task between statuses and reorder using lexoRank
 export const moveTask = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status: targetStatus, prevRank, nextRank } = req.body;
-  if (!targetStatus) {
-    return res.status(400).json({ error: 'target status required' });
-  }
 
-  const result = await moveTaskToStatus({
-    id,
-    targetStatus,
-    prevRank,
-    nextRank,
-    getTaskOr404: (id) => getTaskOr404(id, res),
-    canMoveTask,
-    updateTaskStatusAndOrder,
-    TaskModel: Task
-  });
-
-  if (result.error) {
-    if (result.error === 'Failed to move task') {
-      return res.status(503).json({ error: 'Task move failed due to order collision. Board was rebalanced, please retry.' });
+  try {
+    const task = await moveTaskHelper({ id, targetStatus, prevRank, nextRank, user: req.user });
+    res.json(task);
+  } catch (error) {
+    if (error.message.includes('collision')) {
+      return res.status(503).json({ error: error.message });
     }
-    return res.status(400).json({ error: result.error });
+    return res.status(400).json({ error: error.message });
   }
-  if (result && result.task && result.task.boardId) {
-    io.to(result.task.boardId.toString()).emit('task:moved', {
-      boardId: result.task.boardId.toString(),
-      userId: req.user?.id || req.user?._id
-    });
-  }
-  if (result && result.task) {
-    await syncTaskToRagIndex(result.task, 'upsert');
-  }
-  res.json(result.task);
 });
 
 // GET /api/tasks/search?q=keyword&boardId=
 export const searchTasks = asyncHandler(async (req, res) => {
-  const filter = buildTaskSearchFilter({ q: req.query.q, boardId: req.query.boardId });
-  const results = await Task.find(filter).limit(20);
+  const results = await searchTasksHelper({ q: req.query.q, boardId: req.query.boardId });
   res.json(results);
 });
 
 // GET /api/tasks/:id - Get a single task by ID
 export const getTaskById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const task = await Task.findById(id);
+  const task = await getTaskByIdHelper(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
 });

@@ -1,9 +1,6 @@
-import { syncBoardToRagIndex } from '../middleware/board.middleware.js';
+import { getBoardFilter, formatBoardsWithCounts, createBoardHelper, deleteBoardHelper, searchBoardsHelper } from '../utils/board.helpers.js';
 import Board from '../models/Board.model.js';
-import Task from '../models/Task.model.js';
-import { generateBoardKey, getBoardFilter, resolveBoardMembers, formatBoardsWithCounts } from '../utils/board.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
-import { io } from '../server.js';
 
 // GET /api/boards - List all boards
 export const getBoards = asyncHandler(async (req, res) => {
@@ -23,7 +20,7 @@ export const getBoards = asyncHandler(async (req, res) => {
 
   const boardsWithCounts = formatBoardsWithCounts(boards);
 
-  res.json({ items: boardsWithCounts, total, page, hasMore: page * limit < total});
+  res.json({ items: boardsWithCounts, total, page, hasMore: page * limit < total });
 });
 
 // GET /api/boards/:id - Get a single board by ID
@@ -36,62 +33,39 @@ export const getBoardById = asyncHandler(async (req, res) => {
 
 // POST /api/boards - Create a new board
 export const createBoard = asyncHandler(async (req, res) => {
-  const { name, key: keyFromClient, flag: flagFromClient, members: membersFromClient } = req.body;
+  const { name, key, flag, members } = req.body;
+
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
   }
 
-  const key = await generateBoardKey(name, keyFromClient);
-  const flag = flagFromClient === 'private' ? 'private' : 'public';
-  const creatorId = req.user?.id;
-  const members = await resolveBoardMembers(flag, membersFromClient, creatorId);
-
-  const board = new Board({ name, key, tasks: [], flag, members });
-
-  await board.save();
-  await syncBoardToRagIndex(board, 'upsert');
-  io.emit('board:created', {
-    boardId: board._id.toString(),
-    userId: req.user?.id || req.user?._id
+  const board = await createBoardHelper({
+    name,
+    key,
+    flag,
+    members,
+    user: req.user
   });
+
   res.status(201).json(board);
 });
 
 // GET /api/boards/search?q=keyword - search boards by name or key
 export const searchBoards = asyncHandler(async (req, res) => {
   const query = req.query.q || '';
-  const regex = new RegExp(query, 'i');
-  const filter = { $or: [{ name: regex }, { key: regex }] };
-
-  const results = await Board.find(filter).limit(20);
+  const results = await searchBoardsHelper(query);
   res.json(results);
 });
 
 // DELETE /api/boards/:id - Delete a board
 export const deleteBoard = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const board = await Board.findById(id);
-  if (!board) {
+
+  const result = await deleteBoardHelper(id, req.user);
+
+  if (!result) {
     return res.status(404).json({ error: 'Board not found' });
   }
 
-  await Board.deleteOne({ _id: id });
-  await syncBoardToRagIndex(board, 'delete');
-
-  if (Array.isArray(board.tasks) && board.tasks.length > 0) {
-    await Task.deleteMany({ _id: { $in: board.tasks } });
-  }
-
-  if (board && board._id) {
-      io.to(board._id.toString()).emit('board:deleted', {
-        boardId: board._id.toString(),
-        userId: req.user?.id || req.user?._id
-      });
-  }
-    io.emit('board:deleted', {
-      boardId: board._id.toString(),
-      deleted: true,
-      userId: req.user?.id || req.user?._id
-    });
   res.json({ message: 'Board and its tasks deleted' });
 });
