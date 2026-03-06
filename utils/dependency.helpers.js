@@ -18,6 +18,7 @@ async function parentInProgress(task) {
   const parentTasks = await Task.find({ _id: { $in: task.dependencies } });
   return parentTasks.some(pt => pt.status === 'in_progress');
 }
+
 export async function dependenciesAreReady(task, newStatus) {
   if (!Array.isArray(task.dependencies) || task.dependencies.length === 0) return true;
   const parentTasks = await Task.find({ _id: { $in: task.dependencies } });
@@ -35,23 +36,25 @@ export async function hasChildFurtherAlong(taskId, targetStatus) {
 
 export async function hasCircularDependency(taskId, dependencies) {
   const visited = new Set();
+  
   async function dfs(currentId) {
-    if (!currentId) 
-      return false;
-    if (currentId.toString() === taskId?.toString()) 
-      return true;
-    if (visited.has(currentId.toString())) 
-      return false;
-    visited.add(currentId.toString());
-    const task = await Task.findById(currentId);
-    if (!task || !Array.isArray(task.dependencies)) 
-      return false;
+    if (!currentId) return false;
+    
+    const currentIdStr = currentId.toString();
+    if (currentIdStr === taskId?.toString()) return true;
+    if (visited.has(currentIdStr)) return false;
+    
+    visited.add(currentIdStr);
+    const task = await Task.findById(currentId).lean(); 
+    
+    if (!task || !Array.isArray(task.dependencies)) return false;
+    
     for (const depId of task.dependencies) {
-      if (await dfs(depId)) 
-      return true;
+      if (await dfs(depId)) return true;
     }
     return false;
   }
+
   for (const depId of dependencies) {
     if (await dfs(depId)) return true;
   }
@@ -59,14 +62,29 @@ export async function hasCircularDependency(taskId, dependencies) {
 }
 
 export async function validateDependencies(taskId, dependencies) {
-  if (!Array.isArray(dependencies)) 
+  if (!Array.isArray(dependencies) || dependencies.length === 0) return false;
+
+  const parentTask = await Task.findById(taskId);
+  if (!parentTask || !parentTask.boardId) return false;
+  
+  const parentBoardId = parentTask.boardId.toString();
+  const taskIdStr = taskId.toString();
+
+  const depTasks = await Task.find({ _id: { $in: dependencies } });
+
+  if (depTasks.length !== new Set(dependencies.map(id => id.toString())).size) {
     return false;
-  for (const depId of dependencies) {
-    if (depId.toString() === taskId?.toString()) 
-        return false;
-    const exists = await Task.exists({ _id: depId });
-    if (!exists) 
-        return false;
   }
+
+  for (const depTask of depTasks) {
+    const depIdStr = depTask._id.toString();
+    
+    if (depIdStr === taskIdStr) return false;
+    
+    if (!depTask.boardId || depTask.boardId.toString() !== parentBoardId) {
+      return false;
+    }
+  }
+
   return true;
 }

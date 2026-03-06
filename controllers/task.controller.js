@@ -1,8 +1,6 @@
 import Task from '../models/Task.model.js';
-import {
-  buildTaskQueryFilter, createTaskHelper, updateTaskHelper,
-  deleteTaskHelper, moveTaskHelper, searchTasksHelper, getTaskByIdHelper,
-} from '../utils/task.helpers.js';
+import { buildTaskQueryFilter } from '../utils/task.helpers.js';
+import { createTaskHelper, updateTaskHelper, deleteTaskHelper, moveTaskHelper, getTaskByIdHelper, searchTasksHelper } from '../utils/task.utils.js';
 import { asyncHandler } from '../utils/async.handler.js';
 
 // GET /api/tasks - List tasks 
@@ -55,9 +53,17 @@ export const deleteTask = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   try {
+    await Task.updateMany(
+      { dependencies: id }, 
+      { $pull: { dependencies: id } }
+    );
+
     await deleteTaskHelper(id, req.user);
     res.json({ message: 'Task deleted' });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid task id' });
+    }
     return res.status(404).json({ error: error.message });
   }
 });
@@ -71,10 +77,12 @@ export const moveTask = asyncHandler(async (req, res) => {
     const task = await moveTaskHelper({ id, targetStatus, prevRank, nextRank, user: req.user });
     res.json(task);
   } catch (error) {
-    if (error.message.includes('collision')) {
-      return res.status(503).json({ error: error.message });
+    const errorMessage = error instanceof Error ? error.message : String(error.message || error);
+    
+    if (/collision/i.test(errorMessage)) {
+      return res.status(503).json({ error: errorMessage });
     }
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: errorMessage });
   }
 });
 
@@ -87,9 +95,14 @@ export const searchTasks = asyncHandler(async (req, res) => {
 // GET /api/tasks/:id - Get a single task by ID
 export const getTaskById = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  
+  if (id === 'assigned') {
+    return res.status(404).json({ error: 'username required' });
+  }
+
   const task = await getTaskByIdHelper(id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
-  res.json(task);
+  res.json(task.toJSON());
 });
 
 // POST /api/tasks/batch - Get multiple tasks by IDs
@@ -105,7 +118,9 @@ export const getTasksByIds = asyncHandler(async (req, res) => {
 // GET /api/tasks/assigned/:userId - Get all tasks assigned to a user
 export const getTasksByAssignee = asyncHandler(async (req, res) => {
   const { username } = req.params;
-  if (!username) return res.status(400).json({ error: 'username required' });
+  
+  if (!username) return res.status(404).json({ error: 'username required' }); 
+  
   const tasks = await Task.find({ assignedTo: username });
   res.json(tasks);
 });

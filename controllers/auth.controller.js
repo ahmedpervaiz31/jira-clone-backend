@@ -16,6 +16,7 @@ export const me = asyncHandler(async (req, res) => {
 export const register = asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+  if (typeof username !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'username and password must be strings' });
 
   const existing = await User.findOne({ username });
   if (existing) return res.status(409).json({ error: 'username taken' });
@@ -25,13 +26,14 @@ export const register = asyncHandler(async (req, res) => {
 
   await syncUserToRagIndex(user, 'upsert');
   const token = jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user._id, username: user.username } });
+  res.status(201).json({ token, user: { id: user._id, username: user.username } });
 });
 
 // POST /api/auth/login - Login a user and return JWT
 export const login = asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+  if (typeof username !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'username and password must be strings' });
 
   const user = await User.findOne({ username });
   if (!user) return res.status(401).json({ error: 'invalid credentials' });

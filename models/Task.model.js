@@ -21,6 +21,7 @@ const taskSchema = new mongoose.Schema({
 taskSchema.set('toJSON', {
   transform: (doc, ret) => {
     ret.id = ret._id?.toString();
+    ret.dependencies = Array.isArray(ret.dependencies) ? ret.dependencies.map(d => d.toString()) : [];
     delete ret._id;
     delete ret.__v;
     return ret;

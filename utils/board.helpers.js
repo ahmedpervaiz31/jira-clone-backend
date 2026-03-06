@@ -75,10 +75,6 @@ export function formatBoardsWithCounts(boards) {
 }
 
 export async function createBoardHelper({ name, key: keyFromClient, flag: flagFromClient, members: membersFromClient, user }) {
-    if (!name) {
-        throw new Error('Name is required');
-    }
-
     const key = await generateBoardKey(name, keyFromClient);
     const flag = flagFromClient === 'private' ? 'private' : 'public';
     const creatorId = user?.id || user?._id;

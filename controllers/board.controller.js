@@ -35,19 +35,26 @@ export const getBoardById = asyncHandler(async (req, res) => {
 export const createBoard = asyncHandler(async (req, res) => {
   const { name, key, flag, members } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ error: 'Name is required' });
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ error: 'Name must be a string' });
   }
 
-  const board = await createBoardHelper({
-    name,
-    key,
-    flag,
-    members,
-    user: req.user
-  });
+  try {
+    const board = await createBoardHelper({
+      name,
+      key,
+      flag,
+      members,
+      user: req.user
+    });
 
-  res.status(201).json(board);
+    res.status(201).json(board);
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ error: 'Board with this key already exists' });
+    }
+    throw error;
+  }
 });
 
 // GET /api/boards/search?q=keyword - search boards by name or key
