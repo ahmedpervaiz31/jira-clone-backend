@@ -1,7 +1,7 @@
 import { ragSearch } from '../../jira-rag/search.js';
 import { batchIndexer } from '../../jira-rag/pipeline.js';
 import { askGroq } from '../../jira-rag/groqClient.js';
-import { formatContextChunks, getActiveBoardName, handleAgenticActions } from '../utils/rag.helpers.js';
+import { formatContextChunks, getActiveBoardName, handleAgenticActions } from './rag.helpers.js';
 
 // POST /api/rag/index/batch - batch indexer
 export async function batchIndex(req, res) {

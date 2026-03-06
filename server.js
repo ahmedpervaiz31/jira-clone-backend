@@ -15,6 +15,7 @@ import ragRoutes from './routes/rag.routes.js';
 
 dotenv.config();
 
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -44,35 +45,47 @@ app.get('/health', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  if (err.name === 'CastError') {
+    return res.status(400).json({ error: `Invalid ${err.path}: ${err.value}` });
+  }
   console.error(err.stack);
   res.status(500).json({ message: err.message });
 });
 
-const httpServer = createServer(app);
-const io = new SocketIOServer(httpServer, {
-  cors: {
-    origin: FRONTEND_URL,
-    credentials: true,
-  },
-});
-app.set('socketio', io);
+let httpServer, io;
 
-
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-  handleBoardPresence(io, socket);
-});
-
-export { io };
-
-connectDB()
-  .then(() => {
-    httpServer.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Socket.IO server running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error("Database connection failed:", err);
-    process.exit(1);
+if (process.env.NODE_ENV !== 'test') {
+  httpServer = createServer(app);
+  io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: FRONTEND_URL,
+      credentials: true,
+    },
   });
+  app.set('socketio', io);
+
+  io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
+    handleBoardPresence(io, socket);
+  });
+
+  connectDB()
+    .then(() => {
+      httpServer.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Socket.IO server running on port ${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Database connection failed:", err);
+      process.exit(1);
+    });
+} else {
+  // Provide a minimal socket mock for tests
+  io = {
+    emit: () => { },
+    to: () => ({ emit: () => { } })
+  };
+}
+
+export { app, io };

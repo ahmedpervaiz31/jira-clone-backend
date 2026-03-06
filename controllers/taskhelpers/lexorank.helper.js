@@ -1,4 +1,4 @@
-import Task from '../models/Task.model.js';
+import Task from '../../models/Task.model.js';
 
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 const BASE = ALPHABET.length;
