@@ -1,8 +1,8 @@
-import Task from '../models/Task.model.js';
-import Board from '../models/Board.model.js';
-import { io } from '../server.js';
-import { syncTaskToRagIndex } from '../middleware/task.middleware.js';
-import { hasCircularDependency, validateDependencies, canMoveTask } from './dependency.helpers.js';
+import Task from '../../models/Task.model.js';
+import Board from '../../models/Board.model.js';
+import { io } from '../../server.js';
+import { syncTaskToRagIndex } from '../../middleware/task.middleware.js';
+import { hasCircularDependency, validateDependencies, canMoveTask } from '../dependency.helpers.js';
 import { getTaskOr404, buildTaskSearchFilter } from './task.helpers.js';
 
 export async function computeTaskCreationFields({ boardId, status }) {

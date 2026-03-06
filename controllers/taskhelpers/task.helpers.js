@@ -1,5 +1,5 @@
-import Task from '../models/Task.model.js';
-import Board from '../models/Board.model.js';
+import Task from '../../models/Task.model.js';
+import Board from '../../models/Board.model.js';
 import { generateRank, rebalanceBoard, parseRank } from './lexorank.helper.js';
 
 export async function getTaskOr404(id, res) {

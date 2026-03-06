@@ -1,6 +1,6 @@
 import Task from '../models/Task.model.js';
-import { buildTaskQueryFilter } from '../utils/task.helpers.js';
-import { createTaskHelper, updateTaskHelper, deleteTaskHelper, moveTaskHelper, getTaskByIdHelper, searchTasksHelper } from '../utils/task.utils.js';
+import { buildTaskQueryFilter } from './taskhelpers/task.helpers.js';
+import { createTaskHelper, updateTaskHelper, deleteTaskHelper, moveTaskHelper, getTaskByIdHelper, searchTasksHelper } from './taskhelpers/task.utils.js';
 import { asyncHandler } from '../utils/async.handler.js';
 
 // GET /api/tasks - List tasks 

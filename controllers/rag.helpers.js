@@ -1,5 +1,5 @@
 import { searchBoardsHelper } from './board.helpers.js';
-import { searchTasksHelper } from './task.utils.js';
+import { searchTasksHelper } from './taskhelpers/task.utils.js';
 import { executeToolCall } from '../tools/executor.js';
 import { askGroq } from '../../jira-rag/groqClient.js';
 import { SYSTEM_PROMPTS } from '../../jira-rag/groqPrompt.js';

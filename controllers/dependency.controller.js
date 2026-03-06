@@ -1,6 +1,6 @@
 import Task from '../models/Task.model.js';
-import { hasCircularDependency, validateDependencies } from '../utils/dependency.helpers.js';
-import { getTaskOr404 } from '../utils/task.helpers.js';
+import { hasCircularDependency, validateDependencies } from './dependency.helpers.js';
+import { getTaskOr404 } from './taskhelpers/task.helpers.js';
 import { asyncHandler } from '../utils/async.handler.js';
 
 // POST /api/tasks/:id/dependencies - Add dependencies to a task

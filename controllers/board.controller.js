@@ -1,4 +1,4 @@
-import { getBoardFilter, formatBoardsWithCounts, createBoardHelper, deleteBoardHelper, searchBoardsHelper } from '../utils/board.helpers.js';
+import { getBoardFilter, formatBoardsWithCounts, createBoardHelper, deleteBoardHelper, searchBoardsHelper } from './board.helpers.js';
 import Board from '../models/Board.model.js';
 import { asyncHandler } from '../utils/async.handler.js';
 

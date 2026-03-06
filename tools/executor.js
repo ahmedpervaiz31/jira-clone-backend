@@ -1,5 +1,5 @@
-import { createBoardHelper, deleteBoardHelper } from '../utils/board.helpers.js';
-import { createTaskHelper, updateTaskHelper, deleteTaskHelper, moveTaskHelper } from '../utils/task.utils.js';
+import { createBoardHelper, deleteBoardHelper } from '../controllers/board.helpers.js';
+import { createTaskHelper, updateTaskHelper, deleteTaskHelper, moveTaskHelper } from '../controllers/taskhelpers/task.utils.js';
 
 export async function executeToolCall(toolName, args, user) {
     try {
